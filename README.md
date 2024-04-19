@@ -1,7 +1,7 @@
 ## Single Cell Data Analysis
 
 This repository contains R code used in single cell data analysis of human dermal fibroblasts and adipose-derived mesenchymal stromal cells.
-The scripts are stored under src catalogue. functions.R houses a collection of functions utilized in the analysis, while main_script holds the primary data analysis script
+The scripts are stored under ```src``` catalogue. ```functions.R``` houses a collection of functions utilized in the analysis, while ```main_script.R``` holds the primary data analysis script
 ### Description
 
 The R code provided here was utilized in the analysis of single cell data as detailed in the manuscript titled "Identifying differentiation markers between dermal fibroblasts and adipose-derived mesenchymal stromal cells (AD-MSCs) in human visceral and subcutaneous tissues using single-cell transcriptomics ".
