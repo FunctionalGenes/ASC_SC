@@ -43,3 +43,15 @@ find_doublet <- function(sce){
   sce.db.sub <- subset(sce.db, cells = cells.use)
   return(sce.db.sub)
 }
+
+# Merge Seurat objects, normalize, transform
+merge_seurat_list <- function(seurat_list) {
+  seu.merged <- merge(seurat_list[[1]], seurat_list[2:length(seurat_list)], add.cell.ids = seurat_list %>% names())
+  seu.merged <- subset(seu.merged, subset = nCount_RNA > 2000 & nFeature_RNA > 1000 & mitoPercent < 10) %>% 
+    NormalizeData() %>% 
+    FindVariableFeatures(selection.method = "vst", nfeatures = 5000) %>% 
+    CellCycleScoring(g2m.features=cc.genes.updated.2019$g2m.genes, s.features=cc.genes.updated.2019$s.genes,) %>% 
+    ScaleData(vars.to.regress = c("S.Score", "G2M.Score"))
+  return(seu.merged)
+}
+
