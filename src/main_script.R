@@ -11,14 +11,11 @@ library(gridExtra)
 library(cowplot)
 library(topGO)
 
-### Add info about packages versions used
-
 # Source
 source("functions.R")
 
 # List directories
 local.path <- "/ASC_SC/MEX/"
-
 directories <- list.dirs(local.path, full.names = FALSE, recursive = FALSE)
 
 # Preprocess raw data
