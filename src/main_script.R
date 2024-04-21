@@ -9,32 +9,31 @@ library(RColorBrewer)
 library(scales)
 library(gridExtra)
 library(cowplot)
+library(topGO)
+
+### Add info about packages versions used
 
 # Source
-source("/Users/mouse/GitRepo/MAB_script/src/functions.R")
+source("functions.R")
 
 # List directories
-local.path <- "/Volumes/Extreme SSD/scRNA_MAB/Raws/"
+local.path <- "/ASC_SC/MEX/"
 
 directories <- list.dirs(local.path, full.names = FALSE, recursive = FALSE)
-directories <- directories[grep("SASC", directories)] # Remove this
-
-seurat.list <- list()
-
-# Read data. filter out doublets, save
 
 # Preprocess raw data
+seurat.list <- list()
 for (dir in directories) {
   sample.name <- toupper(dir)
   print(dir)  
-  seurat.obj <- process_data_simple(file.path(local.path, dir, fsep = ""))
+  seurat.obj <- read_and_mt(file.path(local.path, dir, fsep = ""))
+  seurat.obj <- filter_data(seurat.obj)
   seurat.obj <- AddMetaData(seurat.obj, metadata = dir, col.name = "Sample")
   seurat.list[[sample.name]] <- seurat.obj
 }
 
-result_list <- list()
-
 # Remove doublets
+result_list <- list()
 for (i in seq_along(seurat.list)) {
   result_list[[names(seurat.list)[i]]] <- find_doublet(seurat.list[[i]])
 }
@@ -53,7 +52,7 @@ seurat.list.qc <- list()
 for (dir in directories) {
   sample.name <- toupper(dir)
   print(dir)  
-  seurat.obj <- process_data_qc(file.path(local.path, dir, fsep = ""))
+  seurat.obj <- read_and_mt(file.path(local.path, dir, fsep = ""))
   seurat.obj <- AddMetaData(seurat.obj, metadata = dir, col.name = "Sample")
   seurat.list.qc[[sample.name]] <- seurat.obj
 }
@@ -123,3 +122,86 @@ vasc_vln_panel <- plot_grid(vasc.counts, vasc.genes, vasc.mito, ncol = 3, nrow =
 vasc_panel <- plot_grid(vasc_qc_panel, NULL, vasc_vln_panel, ncol = 1, rel_heights = c(2, 0.1, 1), 
                         labels = c("A", "", "B"), label_fontfamily = "sans", label_size = 16)
 
+# Integrate Fibroblast samples
+fib.seurat.list.nodoub <- list()
+fib.directories <- directories[grep("FIB", directories)]
+
+for (dir in fib.directories) {
+  sample.name <- toupper(dir)
+  print(dir)  
+  seurat.obj <- read_and_mt(file.path(local.path, dir, fsep = ""))
+  seurat.obj <- AddMetaData(seurat.obj, metadata = dir, col.name = "Sample")
+  fib.seurat.list.nodoub[[sample.name]] <- seurat.obj
+}
+
+fib.integr <- merge_seurat_list(fib.seurat.list.nodoub) %>% run_integration()
+cluster_plot(DimPlot(fib.integr, reduction = "umap", group.by = "RNA_snn_res.0.4", label = T))
+
+# Integrate SASC samples
+sasc.seurat.list.nodoub <- list()
+sasc.directories <- directories[grep("SASC", directories)]
+
+for (dir in sasc.directories) {
+  sample.name <- toupper(dir)
+  print(dir)  
+  seurat.obj <- read_and_mt(file.path(local.path, dir, fsep = ""))
+  seurat.obj <- AddMetaData(seurat.obj, metadata = dir, col.name = "Sample")
+  sasc.seurat.list.nodoub[[sample.name]] <- seurat.obj
+}
+
+sasc.integr <- merge_seurat_list(sasc.seurat.list.nodoub) %>% run_integration()
+cluster_plot(DimPlot(sasc.integr, reduction = "umap", group.by = "RNA_snn_res.0.4", label = T))
+
+# Integrate VASC samples
+vasc.seurat.list.nodoub <- list()
+vasc.directories <- directories[grep("VASC", directories)]
+
+for (dir in vasc.directories) {
+  sample.name <- toupper(dir)
+  print(dir)  
+  seurat.obj <- read_and_mt(file.path(local.path, dir, fsep = ""))
+  seurat.obj <- AddMetaData(seurat.obj, metadata = dir, col.name = "Sample")
+  vasc.seurat.list.nodoub[[sample.name]] <- seurat.obj
+}
+
+vasc.integr <- merge_seurat_list(vasc.seurat.list.nodoub) %>% run_integration()
+cluster_plot(DimPlot(vasc.integr, reduction = "umap", group.by = "RNA_snn_res.0.4", label = T))
+
+# Integrate all samples
+all.seurat.list.nodoub <- list()
+
+for (dir in directories) {
+  sample.name <- toupper(dir)
+  print(dir)  
+  seurat.obj <- read_and_mt(file.path(local.path, dir, fsep = ""))
+  seurat.obj <- AddMetaData(seurat.obj, metadata = dir, col.name = "Sample")
+  all.seurat.list.nodoub[[sample.name]] <- seurat.obj
+}
+
+all.integr <- merge_seurat_list(all.seurat.list.nodoub) %>% run_integration()
+cluster_plot(DimPlot(all.integr, reduction = "umap", group.by = "RNA_snn_res.0.4", label = T))
+
+# Differential expression analysis
+all.integr@meta.data$Type <- ifelse(grepl("^FIB", all.integr@meta.data$Sample), "FIBR",
+                                           ifelse(grepl("^SASC", all.integr@meta.data$Sample), "SASC",
+                                                  ifelse(grepl("^VASC", all.integr@meta.data$Sample), "VASC", NA)))
+
+markers.fib.sasc <- all.integr %>% FindMarkers(ident.1 = "FIBR", ident.2 = "SASC", verbose = FALSE, group.by = "Type")
+markers.fib.vasc <- all.integr %>% FindMarkers(ident.1 = "FIBR", ident.2 = "VASC", verbose = FALSE, group.by = "Type")
+markers.vasc.sasc <- all.integr %>% FindMarkers(ident.1 = "VASC", ident.2 = "SASC", verbose = FALSE, group.by = "Type")
+
+# Gene enrichment
+fib.sasc.go <- bind_rows(
+  generate_go_data(markers.fib.sasc, rownames(all.integr), "up"),
+  generate_go_data(markers.fib.sasc, rownames(all.integr), "down")
+)
+
+fib.vasc.go <- bind_rows(
+  generate_go_data(markers.fib.vasc, rownames(all.integr), "up"),
+  generate_go_data(markers.fib.vasc, rownames(all.integr), "down")
+)
+
+vasc.sasc.go <- bind_rows(
+  generate_go_data(markers.vasc.sasc, rownames(all.integr), "up"),
+  generate_go_data(markers.vasc.sasc, rownames(all.integr), "down")
+)
